@@ -1,3 +1,9 @@
+import aiAgentAction from './handlerAiAgentAction';
+import aiPageSnapshot from './handlerAiPageSnapshot';
+
 export default function () {
-  return {};
+  return {
+    aiPageSnapshot,
+    aiAgentAction,
+  };
 }
