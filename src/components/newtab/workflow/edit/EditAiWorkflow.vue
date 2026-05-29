@@ -46,18 +46,61 @@
           <div
             v-for="(item, index) in data.inputs"
             :key="`${data.flowUuid}-${item.name}`"
+            class="my-3"
           >
-            <component
-              :is="getComponent(item.type)"
+            <!-- Multiline editor for text prompts -->
+            <ui-textarea
+              v-if="item.type === 'TEXT'"
+              :model-value="item.value"
               :label="`${item.label} (${item.type})`"
               :placeholder="item.name || null"
-              :model-value="item.value"
-              :accept="item.accept"
-              :max-size="item.maxSize"
-              :on-upload="handleUploadFile"
-              class="w-full my-2"
+              autoresize
+              class="w-full min-h-[80px]"
               @change="onInputParamsChange(item, index, $event)"
             />
+            <!-- Media inputs: upload a file or bind a URL/variable -->
+            <template v-else>
+              <div class="flex items-center justify-between mb-1">
+                <label
+                  class="ml-1 text-sm leading-none text-gray-600 dark:text-gray-200"
+                >
+                  {{ item.label }} ({{ item.type }})
+                </label>
+                <ui-button
+                  variant="default"
+                  class="text-xs px-2 py-1"
+                  @click="toggleInputMode(item, index)"
+                >
+                  {{ getInputMode(item) === 'url' ? 'Use upload' : 'Use URL' }}
+                </ui-button>
+              </div>
+
+              <ui-file-input
+                v-if="getInputMode(item) === 'upload'"
+                :model-value="item.value"
+                :placeholder="item.name || null"
+                :accept="item.accept"
+                :max-size="item.maxSize"
+                :on-upload="handleUploadFile"
+                class="w-full"
+              />
+              <ui-input
+                v-else
+                :model-value="getItemUrl(item)"
+                :placeholder="`https://… or {{ variables.image }}`"
+                class="w-full"
+                @change="onInputUrlChange(item, index, $event)"
+              />
+
+              <img
+                v-if="
+                  item.type === 'IMAGE' && isPreviewableUrl(getItemUrl(item))
+                "
+                :src="getItemUrl(item)"
+                alt="preview"
+                class="mt-2 max-h-32 rounded border border-gray-200 dark:border-gray-700"
+              />
+            </template>
           </div>
         </template>
         <template v-else>
@@ -80,6 +123,45 @@
         <template v-else>
           <p class="text-sm text-gray-500">No outputs</p>
         </template>
+      </div>
+
+      <div class="my-4">
+        <p class="font-semibold">Execution</p>
+        <ui-checkbox
+          :model-value="data.waitForResult"
+          block
+          class="mt-2"
+          @change="updateData({ waitForResult: $event })"
+        >
+          Wait for long-running result (poll)
+        </ui-checkbox>
+        <p class="text-xs text-gray-500 mt-1">
+          Enable for image/video generation or multi-step prompts that take a
+          while to finish.
+        </p>
+        <div class="flex space-x-2 mt-2">
+          <ui-input
+            :model-value="data.timeout"
+            type="number"
+            min="0"
+            :label="
+              data.waitForResult
+                ? 'Max wait (seconds)'
+                : 'Timeout (seconds, 0 = none)'
+            "
+            class="w-full"
+            @change="updateData({ timeout: Number($event) || 0 })"
+          />
+          <ui-input
+            v-if="data.waitForResult"
+            :model-value="data.pollInterval"
+            type="number"
+            min="1"
+            label="Poll every (seconds)"
+            class="w-full"
+            @change="updateData({ pollInterval: Number($event) || 3 })"
+          />
+        </div>
       </div>
 
       <div class="my-4">
@@ -190,16 +272,19 @@ function updateData(value) {
   emit('update:data', { ...props.data, ...value });
 }
 
-const getComponent = (type) => {
-  const uploadTypes = ['VIDEO', 'IMAGE', 'AUDIO', 'FILE'];
-  if (uploadTypes.includes(type)) {
-    return UiFileInput;
-  }
-  return UiInput;
-};
+const getInputMode = (item) => item.inputMode || 'upload';
+
+const getItemUrl = (item) =>
+  item && typeof item.value === 'object' && item.value
+    ? item.value.url || ''
+    : '';
+
+const isPreviewableUrl = (url) =>
+  typeof url === 'string' && /^https?:\/\//i.test(url);
 
 const state = shallowReactive({
   showAIPowerTokenModal: false,
+  aipowerToken: '',
 });
 
 const { id: workflowId } = useRoute().params;
@@ -209,6 +294,10 @@ const currentWorkflow = workflowStore.getById(workflowId);
 const aiPowerToken = computed(() => {
   return currentWorkflow?.settings?.aipowerToken;
 });
+
+// Seed the editable field with the stored token so saving without edits is a
+// no-op instead of clearing the configured token.
+state.aipowerToken = aiPowerToken.value || '';
 
 const handleUploadFile = async (file) => {
   try {
@@ -274,7 +363,7 @@ const updateAIPowerToken = (value) => {
 };
 
 const saveAIPowerToken = () => {
-  const oldToken = currentWorkflow.settings.aipowerToken;
+  const oldToken = currentWorkflow?.settings?.aipowerToken;
   const newToken = state.aipowerToken;
 
   // Do nothing if token hasn't changed.
@@ -284,7 +373,7 @@ const saveAIPowerToken = () => {
   }
 
   const newSettings = {
-    ...currentWorkflow.settings,
+    ...(currentWorkflow.settings || {}),
     aipowerToken: newToken,
   };
 
@@ -310,6 +399,20 @@ const onFlowChange = (value, label) => {
 const onInputParamsChange = (item, index, value) => {
   const newInputs = cloneDeep(props.data.inputs);
   newInputs[index].value = value;
+  updateData({ inputs: newInputs });
+};
+
+const toggleInputMode = (item, index) => {
+  const newInputs = cloneDeep(props.data.inputs);
+  newInputs[index].inputMode = getInputMode(item) === 'url' ? 'upload' : 'url';
+  // Reset the value since upload (object) and URL modes are not interchangeable.
+  newInputs[index].value = '';
+  updateData({ inputs: newInputs });
+};
+
+const onInputUrlChange = (item, index, url) => {
+  const newInputs = cloneDeep(props.data.inputs);
+  newInputs[index].value = url ? { url, filename: 'from-url' } : '';
   updateData({ inputs: newInputs });
 };
 

@@ -2,6 +2,69 @@ import secrets from 'secrets';
 
 const BASE_URL = secrets.apApiUrl;
 
+/** Default per-request timeout in milliseconds. */
+export const DEFAULT_REQUEST_TIMEOUT = 30000;
+
+/**
+ * Performs a fetch request against the AI Power API with a shared timeout,
+ * authorization header and consistent error handling.
+ * @param {string} url - The fully qualified request URL.
+ * @param {object} options - Fetch options (method, headers, body, signal...).
+ * @param {string} token - The authorization token.
+ * @param {object} [config] - Extra config.
+ * @param {number} [config.timeout] - Abort the request after this many ms.
+ * @param {string} [config.errorLabel] - Label used in error logs.
+ * @returns {Promise<object>} The parsed JSON response.
+ */
+const apiRequest = async (
+  url,
+  options,
+  token,
+  { timeout = DEFAULT_REQUEST_TIMEOUT, errorLabel = 'AI Power request' } = {}
+) => {
+  const controller = new AbortController();
+  const timer =
+    timeout > 0 ? setTimeout(() => controller.abort(), timeout) : null;
+
+  // Chain an externally provided signal so callers can cancel the request too.
+  if (options.signal) {
+    if (options.signal.aborted) controller.abort();
+    else
+      options.signal.addEventListener('abort', () => controller.abort(), {
+        once: true,
+      });
+  }
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...options.headers,
+      },
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.text().catch(() => '');
+      console.error(`${errorLabel} failed:`, {
+        status: response.status,
+        data: errorData,
+      });
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      throw new Error(`${errorLabel} timed out after ${timeout}ms`);
+    }
+    throw error;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+};
+
 /**
  * @typedef {object} AIWorkflowInputOutput
  * @property {string} label - The display name of the node.
@@ -38,24 +101,15 @@ export const getAPWorkflowDetail = async (flowUuid, token) => {
   const url = new URL(`${BASE_URL}/oapi/power/v1/flow/detail`);
   url.searchParams.append('flowUuid', flowUuid);
 
-  const response = await fetch(url.toString(), {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json; charset=utf-8',
-      Authorization: `Bearer ${token}`,
+  return apiRequest(
+    url.toString(),
+    {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
     },
-  });
-
-  if (!response.ok) {
-    const errorData = await response.text();
-    console.error('Failed to fetch AI Power detail:', {
-      status: response.status,
-      data: errorData,
-    });
-    throw new Error(`HTTP error! status: ${response.status}`);
-  }
-
-  return response.json();
+    token,
+    { errorLabel: 'Fetch AI Power detail' }
+  );
 };
 
 /**
@@ -103,24 +157,15 @@ export const getAPFlowList = async (params, token) => {
     url.searchParams.append('name', name);
   }
 
-  const response = await fetch(url.toString(), {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json; charset=utf-8',
-      Authorization: `Bearer ${token}`,
+  return apiRequest(
+    url.toString(),
+    {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
     },
-  });
-
-  if (!response.ok) {
-    const errorData = await response.text();
-    console.error('Failed to fetch AI Power flow list:', {
-      status: response.status,
-      data: errorData,
-    });
-    throw new Error(`HTTP error! status: ${response.status}`);
-  }
-
-  return response.json();
+    token,
+    { errorLabel: 'Fetch AI Power flow list' }
+  );
 };
 
 /**
@@ -145,28 +190,60 @@ export const getAPFlowList = async (params, token) => {
  * @param {string} token - The authorization token.
  * @returns {Promise<APIStatusResponse>} The API response containing the execution status.
  */
-export const getAPFlowStatus = async (runRecordId, token) => {
+export const getAPFlowStatus = async (runRecordId, token, options = {}) => {
   const url = new URL(`${BASE_URL}/oapi/power/v1/rest/flow/execute/result`);
   url.searchParams.append('runRecordId', String(runRecordId));
 
-  const response = await fetch(url.toString(), {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json; charset=utf-8',
-      Authorization: `Bearer ${token}`,
+  return apiRequest(
+    url.toString(),
+    {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
+      signal: options.signal,
     },
-  });
+    token,
+    { errorLabel: 'Fetch AI Power flow status' }
+  );
+};
 
-  if (!response.ok) {
-    const errorData = await response.text();
-    console.error('Failed to fetch AI Power flow status:', {
-      status: response.status,
-      data: errorData,
+/**
+ * Polls an AI Power workflow run until it succeeds, fails or times out.
+ * @param {number|string} runRecordId - The run record ID to poll.
+ * @param {string} token - The authorization token.
+ * @param {object} [config] - Polling configuration.
+ * @param {number} [config.interval] - Delay between polls in ms.
+ * @param {number} [config.timeout] - Give up after this many ms.
+ * @param {AbortSignal} [config.signal] - Optional cancellation signal.
+ * @returns {Promise<AIWorkflowStatus>} The terminal status data.
+ */
+export const pollAPFlowResult = async (
+  runRecordId,
+  token,
+  { interval = 3000, timeout = 300000, signal } = {}
+) => {
+  const deadline = Date.now() + timeout;
+
+  for (;;) {
+    if (signal?.aborted) throw new Error('AI workflow polling was cancelled');
+
+    const res = await getAPFlowStatus(runRecordId, token, { signal });
+    if (!res.success) {
+      throw new Error(res.msg || 'Failed to fetch AI workflow status');
+    }
+
+    const { status, failReason } = res.data || {};
+    if (status === 'success') return res.data;
+    if (status === 'failed') {
+      throw new Error(failReason || 'AI workflow execution failed');
+    }
+
+    if (Date.now() + interval >= deadline) {
+      throw new Error(`AI workflow timed out after ${timeout}ms`);
+    }
+    await new Promise((resolve) => {
+      setTimeout(resolve, interval);
     });
-    throw new Error(`HTTP error! status: ${response.status}`);
   }
-
-  return response.json();
 };
 
 /**
@@ -196,31 +273,27 @@ export const getAPFlowStatus = async (runRecordId, token) => {
  * @param {string} token - The authorization token.
  * @returns {Promise<APIExecuteResponse>} The API response containing the execution result.
  */
-export const postRunAPWorkflow = async ({ flowUuid, input }, token) => {
+export const postRunAPWorkflow = async (
+  { flowUuid, input },
+  token,
+  options = {}
+) => {
   const url = `${BASE_URL}/oapi/power/v1/rest/flow/${flowUuid}/execute`;
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json; charset=utf-8',
-      Authorization: `Bearer ${token}`,
+  return apiRequest(
+    url,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
+      body: JSON.stringify({ input, source: 'automa_extension' }),
+      signal: options.signal,
     },
-    body: JSON.stringify({
-      input,
-      source: 'automa_extension',
-    }),
-  });
-
-  if (!response.ok) {
-    const errorData = await response.text();
-    console.error('Failed to execute AI Power workflow:', {
-      status: response.status,
-      data: errorData,
-    });
-    throw new Error(`HTTP error! status: ${response.status}`);
-  }
-
-  return response.json();
+    token,
+    {
+      errorLabel: 'Execute AI Power workflow',
+      timeout: options.timeout ?? DEFAULT_REQUEST_TIMEOUT,
+    }
+  );
 };
 
 /**
@@ -244,28 +317,20 @@ export const postRunAPWorkflow = async ({ flowUuid, input }, token) => {
  * @param {string} token - The authorization token.
  * @returns {Promise<APIUploadResponse>} The API response containing the upload result.
  */
-export const postUploadFile = async (file, token) => {
+export const postUploadFile = async (file, token, options = {}) => {
   const url = `${BASE_URL}/oapi/power/v1/file/upload`;
 
   const formData = new FormData();
   formData.append('file', file);
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-    body: formData,
-  });
-
-  if (!response.ok) {
-    const errorData = await response.text();
-    console.error('Failed to upload file:', {
-      status: response.status,
-      data: errorData,
-    });
-    throw new Error(`HTTP error! status: ${response.status}`);
-  }
-
-  return response.json();
+  return apiRequest(
+    url,
+    { method: 'POST', body: formData, signal: options.signal },
+    token,
+    {
+      errorLabel: 'Upload file',
+      // Uploads can be large; allow a longer window than standard requests.
+      timeout: options.timeout ?? 120000,
+    }
+  );
 };

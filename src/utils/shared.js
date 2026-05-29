@@ -68,6 +68,9 @@ export const tasks = {
       description: '',
       inputs: [],
       outputs: [],
+      waitForResult: false,
+      timeout: 0,
+      pollInterval: 3,
       assignVariable: false,
       variableName: '',
 
