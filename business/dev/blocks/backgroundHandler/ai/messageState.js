@@ -12,7 +12,10 @@ function estimateSize(messages = []) {
   );
 }
 
-export function createMessageState({ systemPrompt = '', maxChars = 24000 } = {}) {
+export function createMessageState({
+  systemPrompt = '',
+  maxChars = 24000,
+} = {}) {
   const messages = [];
   if (systemPrompt) {
     messages.push({ role: 'system', content: safeText(systemPrompt) });

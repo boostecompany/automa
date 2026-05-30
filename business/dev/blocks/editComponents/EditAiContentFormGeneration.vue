@@ -166,7 +166,9 @@
     />
 
     <hr />
-    <p class="mb-2 text-sm font-semibold">Provider credentials (workflow settings)</p>
+    <p class="mb-2 text-sm font-semibold">
+      Provider credentials (workflow settings)
+    </p>
     <ui-input
       :model-value="providerCredentials.openrouterApiKey"
       label="OpenRouter API key"
@@ -239,7 +241,7 @@ const suggestedModels = computed(
 );
 
 const credentialStatus = computed(() => {
-  const provider = props.data.provider;
+  const { provider } = props.data;
   if (provider === 'openrouter' && providerCredentials.value.openrouterApiKey) {
     return 'OpenRouter key configured';
   }

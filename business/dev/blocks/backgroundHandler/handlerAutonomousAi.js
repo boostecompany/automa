@@ -1,5 +1,8 @@
 import renderString from '@/workflowEngine/templating/renderString';
-import { executeRegistryAction, getActionPromptContract } from './ai/actionRegistry';
+import {
+  executeRegistryAction,
+  getActionPromptContract,
+} from './ai/actionRegistry';
 import { createMessageState } from './ai/messageState';
 import { invokeProviderModel } from './ai/providerClient';
 
@@ -32,8 +35,9 @@ function formatSnapshot(snapshot = {}) {
     'forms:',
     ...(snapshot.forms || []).map(
       (item, index) =>
-        `${index + 1}. selector=${item.selector || ''}, label=${item.label || ''}, ` +
-        `type=${item.type || ''}`
+        `${index + 1}. selector=${item.selector || ''}, label=${
+          item.label || ''
+        }, type=${item.type || ''}`
     ),
   ].join('\n');
 }
@@ -82,7 +86,11 @@ async function autonomousAi(block, { refData }) {
   }
 
   try {
-    const renderedGoal = await renderString(data.goal || '', refData, this.engine.isPopup);
+    const renderedGoal = await renderString(
+      data.goal || '',
+      refData,
+      this.engine.isPopup
+    );
     const renderedSystem = await renderString(
       data.systemPrompt || '',
       refData,

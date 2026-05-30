@@ -1,29 +1,34 @@
 function normalizeWhitespace(value = '') {
-  return String(value || '').replace(/\s+/g, ' ').trim();
+  return String(value || '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function getSelector(element) {
   if (!element) return '';
   if (element.id) return `#${CSS.escape(element.id)}`;
   if (element.name) {
-    return `${element.tagName.toLowerCase()}[name="${CSS.escape(element.name)}"]`;
+    return `${element.tagName.toLowerCase()}[name="${CSS.escape(
+      element.name
+    )}"]`;
   }
 
   const parts = [];
   let current = element;
   let depth = 0;
   while (current && depth < 4 && current.nodeType === Node.ELEMENT_NODE) {
-    const tag = current.tagName.toLowerCase();
-    const parent = current.parentElement;
+    const node = current;
+    const tag = node.tagName.toLowerCase();
+    const parent = node.parentElement;
     if (!parent) {
       parts.unshift(tag);
       break;
     }
 
     const siblings = Array.from(parent.children).filter(
-      (item) => item.tagName === current.tagName
+      (item) => item.tagName === node.tagName
     );
-    const index = siblings.indexOf(current);
+    const index = siblings.indexOf(node);
     const nth = siblings.length > 1 ? `:nth-of-type(${index + 1})` : '';
     parts.unshift(`${tag}${nth}`);
     current = parent;
@@ -65,7 +70,10 @@ function mapFormFields() {
 }
 
 function aiPageSnapshot(block) {
-  const maxTextLength = Math.max(100, Number(block?.data?.maxTextLength || 5000));
+  const maxTextLength = Math.max(
+    100,
+    Number(block?.data?.maxTextLength || 5000)
+  );
   const includeForms = Boolean(block?.data?.includeForms);
   const bodyText = normalizeWhitespace(document.body?.innerText || '').slice(
     0,

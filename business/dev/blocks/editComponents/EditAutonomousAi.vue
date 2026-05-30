@@ -124,8 +124,8 @@
     />
 
     <p class="mb-2 rounded bg-yellow-50 p-2 text-xs text-yellow-800">
-      Autonomous mode uses a constrained action registry:
-      navigate, click, type, extract, wait, finish.
+      Autonomous mode uses a constrained action registry: navigate, click, type,
+      extract, wait, finish.
     </p>
 
     <ui-checkbox
