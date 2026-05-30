@@ -4,7 +4,7 @@ export default function () {
       name: 'AI Content & Form Data',
       description:
         'Generate content or structured form data with OpenRouter, ChatGPT, or Gemini',
-      icon: 'riRobot2Line',
+      icon: 'riRobotLine',
       component: 'BlockBasic',
       editComponent: 'EditAiContentFormGeneration',
       category: 'general',

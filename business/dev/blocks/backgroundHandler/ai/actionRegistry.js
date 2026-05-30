@@ -45,7 +45,9 @@ function validateAction(action = {}) {
     case 'finish':
       break;
     default:
-      throw new Error(`Unsupported action type: ${normalized.type || 'unknown'}`);
+      throw new Error(
+        `Unsupported action type: ${normalized.type || 'unknown'}`
+      );
   }
 
   return normalized;
@@ -81,7 +83,9 @@ export function getActionPromptContract() {
 export function buildActionRegistry(ctx) {
   return {
     async navigate(action) {
-      await BrowserAPIService.tabs.update(ctx.activeTab.id, { url: action.url });
+      await BrowserAPIService.tabs.update(ctx.activeTab.id, {
+        url: action.url,
+      });
       await waitTabLoaded({
         tabId: ctx.activeTab.id,
         ms: Math.max(5000, Number(action.timeoutMs || ctx.timeoutMs || 30000)),
@@ -95,19 +99,27 @@ export function buildActionRegistry(ctx) {
       };
     },
     async click(action) {
-      const data = await ctx._sendMessageToTab(buildContentActionPayload(action));
+      const data = await ctx._sendMessageToTab(
+        buildContentActionPayload(action)
+      );
       return { success: true, data };
     },
     async type(action) {
-      const data = await ctx._sendMessageToTab(buildContentActionPayload(action));
+      const data = await ctx._sendMessageToTab(
+        buildContentActionPayload(action)
+      );
       return { success: true, data };
     },
     async extract(action) {
-      const data = await ctx._sendMessageToTab(buildContentActionPayload(action));
+      const data = await ctx._sendMessageToTab(
+        buildContentActionPayload(action)
+      );
       return { success: true, data };
     },
     async wait(action) {
-      const data = await ctx._sendMessageToTab(buildContentActionPayload(action));
+      const data = await ctx._sendMessageToTab(
+        buildContentActionPayload(action)
+      );
       return { success: true, data };
     },
     async finish(action) {

@@ -18,10 +18,13 @@ const DEFAULT_BASE_URLS = {
   openai: 'https://api.openai.com/v1/chat/completions',
 };
 
-const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
+const GEMINI_BASE_URL =
+  'https://generativelanguage.googleapis.com/v1beta/models';
 
 function delay(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 function withTimeout(timeoutMs = 45000) {
@@ -59,7 +62,11 @@ function parseProviderError(status, bodyText = '') {
     return { type: 'auth', retryable: false, message: 'Authentication failed' };
   }
   if (status === 429) {
-    return { type: 'rate_limit', retryable: true, message: 'Rate limit reached' };
+    return {
+      type: 'rate_limit',
+      retryable: true,
+      message: 'Rate limit reached',
+    };
   }
   if (status >= 500) {
     return {
@@ -83,7 +90,7 @@ function toGeminiContents(messages = []) {
   }));
 }
 
-function getToken(workflowSettings = {}, provider, blockData = {}) {
+function getToken(workflowSettings, provider, blockData = {}) {
   const providerSettings = workflowSettings?.aiProviderCredentials || {};
 
   switch (provider) {
@@ -143,7 +150,10 @@ function getOpenAICompatibleUrl(provider, workflowSettings = {}) {
   }
 
   return workflowSettings?.aiProviderCredentials?.openaiBaseUrl
-    ? `${workflowSettings.aiProviderCredentials.openaiBaseUrl.replace(/\/$/, '')}/chat/completions`
+    ? `${workflowSettings.aiProviderCredentials.openaiBaseUrl.replace(
+        /\/$/,
+        ''
+      )}/chat/completions`
     : DEFAULT_BASE_URLS.openai;
 }
 
@@ -333,8 +343,10 @@ export async function invokeProviderModel({
 }
 
 export function getProviderCapabilities(provider) {
-  return PROVIDER_CAPABILITIES[provider] || {
-    supportsJsonMode: false,
-    supportsSystemPrompt: false,
-  };
+  return (
+    PROVIDER_CAPABILITIES[provider] || {
+      supportsJsonMode: false,
+      supportsSystemPrompt: false,
+    }
+  );
 }

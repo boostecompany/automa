@@ -1,5 +1,7 @@
 function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 function withSelector(block, handleSelector, onSelected) {
@@ -28,13 +30,15 @@ function withSelector(block, handleSelector, onSelected) {
 async function runExtract(block, handleSelector) {
   const values = [];
   await withSelector(block, handleSelector, async (element) => {
-    const action = block.data.action;
+    const { action } = block.data;
     if (action.attribute) {
       values.push(element.getAttribute(action.attribute) || '');
       return;
     }
 
-    values.push((action.includeHtml ? element.outerHTML : element.innerText) || '');
+    values.push(
+      (action.includeHtml ? element.outerHTML : element.innerText) || ''
+    );
   });
 
   if (block.data.action.multiple) return values;
@@ -92,7 +96,9 @@ async function aiAgentAction(block, { handleSelector }) {
     case 'wait':
       return runWait(block, handleSelector);
     default:
-      throw new Error(`Unsupported content action: ${action.type || 'unknown'}`);
+      throw new Error(
+        `Unsupported content action: ${action.type || 'unknown'}`
+      );
   }
 }
 

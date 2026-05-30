@@ -32,7 +32,9 @@ function validateRequiredKeys(parsed, schemaJson, strictSchema) {
 
   const missing = required.filter((key) => !(key in parsed));
   if (missing.length) {
-    throw new Error(`Schema validation failed: missing keys ${missing.join(', ')}`);
+    throw new Error(
+      `Schema validation failed: missing keys ${missing.join(', ')}`
+    );
   }
 }
 
@@ -82,13 +84,21 @@ async function aiContentFormGeneration(block, { refData }) {
   const replacedValue = {};
 
   try {
-    const renderedPrompt = await renderString(data.prompt || '', refData, this.engine.isPopup);
+    const renderedPrompt = await renderString(
+      data.prompt || '',
+      refData,
+      this.engine.isPopup
+    );
     const renderedSystem = await renderString(
       data.systemPrompt || '',
       refData,
       this.engine.isPopup
     );
-    Object.assign(replacedValue, renderedPrompt.list || {}, renderedSystem.list || {});
+    Object.assign(
+      replacedValue,
+      renderedPrompt.list || {},
+      renderedSystem.list || {}
+    );
 
     let pageContext = null;
     if (data.usePageContext || data.useFormContext) {
